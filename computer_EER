@@ -1,0 +1,62 @@
+function EER = computer_EER(Feature_image,num1,num2)
+
+EER = 1;
+%% 计算每个手指与同类手指的相似度
+similar_same = zeros(num1,(1+num2-1)*(num2-1)/2);
+for i=1:num1      %计算相同手指的
+    num =0;
+    for j=1:(num2-1)
+        for k=(j+1):num2
+            num = num+1;
+            similar_same(i,num) = sum((double(Feature_image(:,i,j)) - double(Feature_image(:,i,k))).^2);
+        end
+    end
+end
+
+
+%% 计算不同手指的相似度
+similar_different = zeros(num1,num2*(num1-1)*num2);
+for i=1:num1      %计算不同手指的
+    num =0;
+    for j=1:num2
+        for k =i:num1
+            if i~=k
+                for t=1:num2
+                    num = num+1;
+                    similar_different(i,num) = sum((double(Feature_image(:,i,j)) - double(Feature_image(:,k,t))).^2);
+                end
+            end
+        end
+    end
+end
+
+%% 保存结果
+if num1 == 636
+    path = '.\LBP_SDUMLA_data.mat';    
+elseif num1 == 428
+    path = '.\LBP_FVUSM_data.mat';    
+elseif num1 == 600
+    path = '.\LBP_MMCBNU_data.mat';    
+end
+save(path,'similar_same','similar_different');
+
+%% 计算识别率
+statistics_same = similar_same(similar_same>0);
+statistics_different = similar_different(similar_different>0);
+
+statistics_same = roundn(statistics_same,-3);
+statistics_different = roundn(statistics_different,-3);
+
+[sum1,~] = size(statistics_same);
+[sum2,~] = size(statistics_different);
+
+for i=0:0.05:400    %  SDUMLA:0:0.05:200     FV-USM:0:0.1:400
+    a1 = length(find(statistics_same<i))/(sum1);
+    b1 = length(find(statistics_different<i))/(sum2);
+    if abs(1-a1-b1)<0.001
+        if b1<EER
+            disp("阈值为"+i+"时,EER为:"+b1);
+            EER = b1;
+        end
+    end
+end
