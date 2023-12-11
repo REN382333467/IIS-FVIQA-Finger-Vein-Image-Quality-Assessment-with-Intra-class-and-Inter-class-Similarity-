@@ -1,0 +1,10 @@
+function dist=informationentropy(P)
+
+
+P = sort(P(:));
+dist = 0;
+length = size(P);
+
+for i=1:length
+    dist = dist-P(i)*log2(P(i));
+end
