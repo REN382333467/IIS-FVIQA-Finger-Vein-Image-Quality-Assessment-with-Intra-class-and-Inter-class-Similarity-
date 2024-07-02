@@ -175,4 +175,3 @@ for i=1:10
     EER_quality2(1,i) = computer_quality_EER(Feature_image_quality,num1,num2,i*sif_num);
 end
 
-
