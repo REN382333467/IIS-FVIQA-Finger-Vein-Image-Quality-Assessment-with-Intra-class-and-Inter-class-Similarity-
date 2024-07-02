@@ -1,177 +1,170 @@
 clc;clear;
 close all;
 
-% 数据集的路径
+% Path to the dataset
 Folder_dir = strcat('D:\DATA\SDMLA\BMP格式\original\');
+% Example paths:
 %   D:\DATA\SDMLA\BMP格式\original\
 %   D:\DATA\FV-USM_Dec2013\重新排序\
 %   D:\DATA\MMCBNU_6000\Captured images2\
 
-% 数据集的类别和样本数量
-num1 = 636;
-num2 = 6;
+% Number of categories and samples in the dataset
+num1 = 636; % Number of categories
+num2 = 6;   % Number of samples per category
 
-% 类间计算数量
-fix_num = num2-1;
+% Number of inter-class calculations
+fix_num = num2 - 1;
 
-% 重复次数
+% Number of repetitions
 K_num = num2;
 
-% 融合权重
+% Fusion weight
 weight = 0;
 
-% 归一化图像大小
+% Normalized image size
 img_high = 240;
 img_width = 320;
 
-% 用于样本的特征
-Feature_image = zeros(17700,num1,num2);    %因为使用LBP，所以SDUMLA:17700,FV-USM:70800,MMCBNU_6000:70800
+% Feature array for samples
+Feature_image = zeros(17700, num1, num2);    % LBP feature size for SDUMLA: 17700, FV-USM: 70800, MMCBNU_6000: 70800
 
-% 每次筛选的数量
+% Number of samples to be filtered each time
 sif_num = 38;   % num1*num2*5%=190.8
 
-%% 提取图像特征
-for i=1:num1
-    fileNames = strcat(Folder_dir,num2str(i,'%03d') );   % num2str(i,'%03d')    
-    image_Out=dir(fullfile(fileNames,'*.bmp'));
-    imageNames={image_Out.name}';
+%% Extract image features
+for i = 1:num1
+    fileNames = strcat(Folder_dir, num2str(i, '%03d')); % Create file path
+    image_Out = dir(fullfile(fileNames, '*.bmp'));     % Get list of BMP images
+    imageNames = {image_Out.name}';
     lengths = length(imageNames);
-    for j=1:lengths
-            % 读取图像，提取特征并保存
-            img = imageNames(j);
-            img = img{1};
-            imgs = strcat(fileNames,'\');
-            imgs = strcat(imgs,img);
-            x1 = imread(imgs);
-            % 提取LBP特征
-            temp = veinLBPFeature(x1);
-            Feature_image(:,i,j) = double(temp);
+    for j = 1:lengths
+        % Read image, extract features, and save
+        img = imageNames(j);
+        img = img{1};
+        imgs = strcat(fileNames, '\');
+        imgs = strcat(imgs, img);
+        x1 = imread(imgs);
+        % Extract LBP features
+        temp = veinLBPFeature(x1);
+        Feature_image(:, i, j) = double(temp);
     end
 end
 
-
-%% 计算类内相似度
-pos_similarity_dist = zeros(num1,num2,(num2-1));
-sum_pos_similarity_dist = zeros(num1,num2);
-for i=1:num1
-    for j=1:num2
-        num =0;
-        for k=1:num2
-            if j~=k
-                num = num+1;
-                % 使用欧式距离计算特征的相似度
-                temp = sum((double(Feature_image(:,i,j))-double(Feature_image(:,i,k))).^2);
-                if temp==0
-                    pos_similarity_dist(i,j,num) = 0.00001;
+%% Calculate intra-class similarity
+pos_similarity_dist = zeros(num1, num2, (num2 - 1));
+sum_pos_similarity_dist = zeros(num1, num2);
+for i = 1:num1
+    for j = 1:num2
+        num = 0;
+        for k = 1:num2
+            if j ~= k
+                num = num + 1;
+                % Calculate similarity using Euclidean distance
+                temp = sum((double(Feature_image(:, i, j)) - double(Feature_image(:, i, k))).^2);
+                if temp == 0
+                    pos_similarity_dist(i, j, num) = 0.00001;
                 else
-                    pos_similarity_dist(i,j,num) = temp;
+                    pos_similarity_dist(i, j, num) = temp;
                 end
             end
         end
-        sum_pos_similarity_dist(i,j) = sum(pos_similarity_dist(i,j,:));
+        sum_pos_similarity_dist(i, j) = sum(pos_similarity_dist(i, j, :));
     end
 end
 
+%% Repeat K_num times
+quality_dist = zeros(num1, num2);
+quality_dist_inter = zeros(num1, num2);  % Inter-class
+quality_dist_intra = zeros(num1, num2);  % Intra-class
+quality_dist2 = zeros(num1, num2);
 
-%% 重复进行K_num次
-quality_dist = zeros(num1,num2);
-quality_dist_inter = zeros(num1,num2);  %类间
-quality_dist_intra = zeros(num1,num2);  %类内
-quality_dist2 = zeros(num1,num2);
-
-for kk=1:K_num
-    %% 计算类间相似度
-    neg_similarity_dist = zeros(num1,num2,fix_num);
-    sum_neg_similarity_dist = zeros(num1,num2);
-    for i=1:num1
-        for j=1:num2
+for kk = 1:K_num
+    %% Calculate inter-class similarity
+    neg_similarity_dist = zeros(num1, num2, fix_num);
+    sum_neg_similarity_dist = zeros(num1, num2);
+    for i = 1:num1
+        for j = 1:num2
             temp = 1;
-            % 生成需要计算的随机类间类别
+            % Generate random inter-class categories to calculate
             while temp == 1
                 s1 = randperm(num1);
                 s1 = s1(1:fix_num);
-                temp = sum(ismember(s1,i));
+                temp = sum(ismember(s1, i));
             end
-            for k=1:fix_num
-                %类别中，再随机生成一个样本
-                s2 = round(rand()*(num2-1))+1;
-                neg_similarity_dist(i,j,k) = sum((double(Feature_image(:,i,j))-double(Feature_image(:,s1(k),s2))).^2);           
+            for k = 1:fix_num
+                % Randomly select a sample within the category
+                s2 = round(rand() * (num2 - 1)) + 1;
+                neg_similarity_dist(i, j, k) = sum((double(Feature_image(:, i, j)) - double(Feature_image(:, s1(k), s2))).^2);
             end
-            sum_neg_similarity_dist(i,j) = sum(neg_similarity_dist(i,j,:));
-        end
-    end       
-    
-    %% 计算类内和类间距离
-    dist_temp1 = zeros(num1,num2);
-    dist_temp2 = zeros(num1,num2);
-    distance_dist2 = zeros(num1,num2);
-
-    for i=1:num1
-        for j=1:num2
-            %% （1）分别计算ws_distance和信息熵
-            dist_temp1(i,j) = ws_distance(pos_similarity_dist(i,j,:), neg_similarity_dist(i,j,:), 1);
-            dist_temp2(i,j) = informationentropy(pos_similarity_dist(i,j,:));
-           
-            %% 计算ws_distance距离
-            distance_dist2(i,j) = ws_distance(pos_similarity_dist(i,j,:), neg_similarity_dist(i,j,:), 1);
-
+            sum_neg_similarity_dist(i, j) = sum(neg_similarity_dist(i, j, :));
         end
     end
-    %% (2)将距离归一化到0-100，并进行累加
-    quality_dist_inter = quality_dist_inter + normalization(dist_temp1,0,100);
-    quality_dist_intra = quality_dist_intra + normalization(dist_temp2,0,100);
-
-    %% 将距离归一化到0-100
-    quality_dist2 = quality_dist2 + normalization(distance_dist2,0,100);
-
     
+    %% Calculate intra-class and inter-class distances
+    dist_temp1 = zeros(num1, num2);
+    dist_temp2 = zeros(num1, num2);
+    distance_dist2 = zeros(num1, num2);
+
+    for i = 1:num1
+        for j = 1:num2
+            %% (1) Calculate ws_distance and information entropy separately
+            dist_temp1(i, j) = ws_distance(pos_similarity_dist(i, j, :), neg_similarity_dist(i, j, :), 1);
+            dist_temp2(i, j) = informationentropy(pos_similarity_dist(i, j, :));
+           
+            %% Calculate ws_distance
+            distance_dist2(i, j) = ws_distance(pos_similarity_dist(i, j, :), neg_similarity_dist(i, j, :), 1);
+        end
+    end
+    
+    %% (2) Normalize distances to 0-100 and accumulate
+    quality_dist_inter = quality_dist_inter + normalization(dist_temp1, 0, 100);
+    quality_dist_intra = quality_dist_intra + normalization(dist_temp2, 0, 100);
+
+    %% Normalize distances to 0-100
+    quality_dist2 = quality_dist2 + normalization(distance_dist2, 0, 100);
 end
 
-%% 取均值
-quality_dist2 = quality_dist2./K_num;
+%% Calculate mean
+quality_dist2 = quality_dist2 ./ K_num;
 
-%% （3）取类内和类间的均值
-quality_dist_inter = quality_dist_inter./K_num; 
-quality_dist_intra = quality_dist_intra./K_num; 
+%% (3) Calculate mean of intra-class and inter-class distances
+quality_dist_inter = quality_dist_inter ./ K_num;
+quality_dist_intra = quality_dist_intra ./ K_num;
 
-%% （4）计算权重，并将ws_distance和信息熵融合
-weight = 1-(std2(quality_dist_intra)/mean(mean(quality_dist_intra)))/((std2(quality_dist_intra)/mean(mean(quality_dist_intra)))+(std2(quality_dist_inter)/mean(mean(quality_dist_inter))));
-quality_dist = weight*quality_dist_inter + (1-weight)*quality_dist_intra;
+%% (4) Calculate weight and fuse ws_distance and information entropy
+weight = 1 - (std2(quality_dist_intra) / mean(mean(quality_dist_intra))) / ((std2(quality_dist_intra) / mean(mean(quality_dist_intra))) + (std2(quality_dist_inter) / mean(mean(quality_dist_inter))));
+quality_dist = weight * quality_dist_inter + (1 - weight) * quality_dist_intra;
 
+%% Calculate EER of the complete dataset without removing low-quality images
+disp(".........................Calculating EER of the complete dataset.........................");
+EER_complete = computer_EER(Feature_image, num1, num2);
 
-%% 计算未去除低质量图像时，数据集识别性能
-disp(".........................计算完整数据集的EER.........................");
-EER_complete = computer_EER(Feature_image,num1,num2);
-
-
-%% WD距离+类内信息熵去除部分低质量图像后，数据集识别性能
+%% Calculate EER of the dataset after removing low-quality images using WD distance and intra-class information entropy
 quality_dist_temp = quality_dist;
 Feature_image_quality = Feature_image;
-EER_quality = zeros(1,30);
-for i=1:10
+EER_quality = zeros(1, 30);
+for i = 1:10
     temp_list = sort(quality_dist_temp(:));
-    [r,c]=find(quality_dist_temp<=temp_list(sif_num),sif_num);
-    for j=1:sif_num
-        Feature_image_quality(:,r(j),c(j)) = 0;
-        quality_dist_temp(r(j),c(j)) = 1000;
+    [r, c] = find(quality_dist_temp <= temp_list(sif_num), sif_num);
+    for j = 1:sif_num
+        Feature_image_quality(:, r(j), c(j)) = 0;
+        quality_dist_temp(r(j), c(j)) = 1000;
     end
-    disp(".........................1.WD距离+类内信息熵筛选"+i*sif_num+"个低质量图像后,计算EER.........................");
-    EER_quality(1,i) = computer_quality_EER(Feature_image_quality,num1,num2,i*sif_num);
+    disp(".........................1. WD distance + intra-class information entropy filtering " + i * sif_num + " low-quality images, calculating EER.........................");
+    EER_quality(1, i) = computer_quality_EER(Feature_image_quality, num1, num2, i * sif_num);
 end
 
-
-%% WD距离去除部分低质量图像后，数据集识别性能
+%% Calculate EER of the dataset after removing low-quality images using only WD distance
 quality_dist_temp = quality_dist2;
 Feature_image_quality = Feature_image;
-EER_quality2 = zeros(1,30);
-for i=1:10
+EER_quality2 = zeros(1, 30);
+for i = 1:10
     temp_list = sort(quality_dist_temp(:));
-    [r,c]=find(quality_dist_temp<=temp_list(sif_num),sif_num);
-    for j=1:sif_num
-        Feature_image_quality(:,r(j),c(j)) = 0;
-        quality_dist_temp(r(j),c(j)) = 1000;
+    [r, c] = find(quality_dist_temp <= temp_list(sif_num), sif_num);
+    for j = 1:sif_num
+        Feature_image_quality(:, r(j), c(j)) = 0;
+        quality_dist_temp(r(j), c(j)) = 1000;
     end
-    disp(".........................2.WD距离筛选"+i*sif_num+"个低质量图像后,计算EER.........................");
-    EER_quality2(1,i) = computer_quality_EER(Feature_image_quality,num1,num2,i*sif_num);
+    disp(".........................2. WD distance filtering " + i * sif_num + " low-quality images, calculating EER.........................");
+    EER_quality2(1, i) = computer_quality_EER(Feature_image_quality, num1, num2, i * sif_num);
 end
-
